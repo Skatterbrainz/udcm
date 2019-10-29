@@ -1,0 +1,27 @@
+{
+    "cmdevices": {
+        "source": "CM",
+        "query": "SMS_R_System",
+        "properties": "ResourceID,Name,Client,ClientVersion,ADSiteName,DistinguishedName,MACAddresses,IPAddresses,LastLogonTimestamp,OperatingSystemNameandVersion,Build"
+    },
+    "cmusers": {
+        "source": "CM",
+        "query": "SMS_R_User",
+        "properties": "UserName,FullUserName,DistinguishedName,Mail,UserPrincipalName,UserAccountControl,UserGroupName,UserOUName,ObjectGUID,WindowsNTDomain"
+    },
+    "cmapplications": {
+        "source": "SQL",
+        "query": "select ARPDisplayName0 as ProductName,ProductVersion0 as Version,Publisher0 as Publisher,ProductCode0 as ProductCode from v_GS_INSTALLED_SOFTWARE_CATEGORIZED order by ARPDisplayName,ProductVersion0",
+        "properties": ""
+    },
+    "adusers": {
+        "source": "AD",
+        "query": "",
+        "properties": "SamAccountName,DisplayName,DistinguishedName,Mail,UserPrincipalName"
+    },
+    "adgroups": {
+        "source": "AD",
+        "query": "",
+        "properties": "Name,DisplayName,DistinguishedName"
+    }
+}
