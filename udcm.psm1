@@ -11,15 +11,47 @@ function New-UDCM {
     try {
         $Endpoints = @()
 
-        Write-Verbose "sms_r_system"
+        Write-Verbose "cmdevices"
+        <#
         $def = @{
             Class = "SMS_R_System"
             Namespace = "root\SMS\Site_$SiteCode"
         }
         $Cache:CMDevices = @( Get-WmiObject @def | select ResourceID,Name,Client,ClientVersion,ADSiteName,DistinguishedName,MACAddresses,IPAddresses,LastLogonTimestamp,OperatingSystemNameandVersion,Build )
+        #>
+        $def = @{
+            SqlInstance = $DbHost
+            Database    = $Database
+            Query = "SELECT DISTINCT
+    sys.ResourceID,
+    sys.Name0 AS Name,
+    case
+        when (sys.Client0 = 1) then 'Yes'
+        else 'No' end as Client,
+    sys.Client_Version0 AS ClientVersion,
+    sys.AD_Site_Name0 AS ADSiteName,
+    sys.Operating_System_Name_and0 AS OSName,
+    sys.Build01 as OSBuild,
+    ws.UserName,
+    ws.LastHardwareScan AS LastHwScan,
+    ws.LastDDR, ws.LastPolicyRequest AS LastPolicyReq,
+    ws.LastMPServerName AS LastMP,
+    ws.IsVirtualMachine AS IsVM,
+    cs.Manufacturer0 AS Manufacturer,
+    cs.Model0 AS Model,
+    se.SerialNumber0 AS SerialNumber
+FROM
+    dbo.v_R_System AS sys LEFT OUTER JOIN
+    dbo.v_GS_SYSTEM_ENCLOSURE AS se ON sys.ResourceID = se.ResourceID LEFT OUTER JOIN
+    dbo.v_GS_COMPUTER_SYSTEM AS cs ON sys.ResourceID = cs.ResourceID LEFT OUTER JOIN
+    dbo.vWorkstationStatus AS ws ON sys.ResourceID = ws.ResourceID
+order by
+    sys.Name0"
+        }
+        $Cache:CMDevices = @( Invoke-DbaQuery @def | Select ResourceID,Name,Client,ClientVersion,ADSiteName,OSName,OSBuild,UserName,LastHwScan,LastDDR,LastPolicyReq,LastMP,IsVM,Manufacturer,Model,SerialNumber )
         $Endpoints += New-UDEndpoint -Url "cmdevices" -Endpoint { $Cache:CMDevices | ConvertTo-Json }
 
-        Write-Verbose "sms_r_user"
+        Write-Verbose "cmusers"
         $def = @{
             Class = "SMS_R_User"
             Namespace = "root\SMS\Site_$SiteCode"
@@ -27,7 +59,7 @@ function New-UDCM {
         $Cache:CMUsers = @( Get-WmiObject @def | select UserName,FullUserName,DistinguishedName,Mail,UserPrincipalName,UserAccountControl,UserGroupName,UserOUName,ObjectGUID,WindowsNTDomain )
         $Endpoints += New-UDEndpoint -Url "cmusers" -Endpoint { $Cache:CMUsers | ConvertTo-Json }
 
-        Write-Verbose "host: $DbHost / database: $Database"
+        Write-Verbose "cmapps"
         $def = @{
             SqlInstance = $DbHost
             Database    = $Database
@@ -39,10 +71,11 @@ function New-UDCM {
         $Cache:CMApps = @( Invoke-DbaQuery @def | Select ProductName,Version,Publisher,ProductCode,Installs )
         $Endpoints += New-UDEndpoint -Url "cmapps" -Endpoint { $Cache:CMApps | ConvertTo-Json }
 
+        Write-Verbose "cmhardware"
         $def = @{
             SqlInstance = $DbHost
             Database    = $Database
-            Query = "select Manufacturer0 as Manufacturer, Model0 as Model, COUNT(*) as Devices from dbo.v_GS_COMPUTER_SYSTEM order by Manufacturer0,Model0"
+            Query = "select Manufacturer0 as Manufacturer, Model0 as Model, COUNT(*) as Devices from dbo.v_GS_COMPUTER_SYSTEM group by Manufacturer0,Model0 order by Manufacturer0,Model0"
         }
         $Cache:CMHardware = @( Invoke-DbaQuery @def | Select Manufacturer,Model,Devices )
         $Endpoints += New-UDEndpoint -Url "cmhardware" -Endpoint { $Cache:CMHardware | ConvertTo-Json }
