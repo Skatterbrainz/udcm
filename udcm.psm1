@@ -1,11 +1,65 @@
+<#
+.SYNOPSIS
+    Import configuration JSON file
+.DESCRIPTION
+    Import configuration JSON file (for future use)
+.PARAMETER InputFile
+    Path and name of configuration file (default is config.json)
+.EXAMPLE
+    Import-UdCmJson -InputFile "c:\apps\config.json"
+.NOTES
+    1910.29 - 0.1 - Initial release
+#>
+function Import-UdCmJson {
+    param(
+        [parameter()][ValidateNotNullOrEmpty()][string]$InputFile = "config.json"
+    )
+    if (Test-Path $InputFile) {
+        $hashtable = @{}
+        Write-Output $(Get-Content -Path $InputFile | ConvertFrom-Json) -NoEnumerate
+    }
+    else {
+        Write-Warning "file not found: $InputFile"
+    }
+}
+
+<#
+.SYNOPSIS
+    Launch udcm web service
+.DESCRIPTION
+    Launch udcm web service and establish data stores for 
+    ConfigMgr, and Active Directory objects
+.PARAMETER SiteCode
+    Configuration Manager site code
+.PARAMETER Database
+    Configuration Manager site database name (e.g. "CM_P01")
+.PARAMETER DbHost
+    Configuration Manager site database instance hostname (default is localhost)
+.PARAMETER Port
+    TCP port number for web service (default is 10001)
+.PARAMETER ConfigFile
+    (not currently used, planned for the future)
+.EXAMPLE
+    New-UDCM -SiteCode "P01"
+    Launch web service and query data from database CM_P01 on localhost and AD using port 10001
+.EXAMPLE
+    New-UDCM -SiteCode "P01" -DbHost "cm02"
+    Launch web service and query data from database CM_P01 on instance host cm02 and AD using port 10001
+.EXAMPLE
+    New-UDCM -SiteCode "P01" -Port 8080
+    Launch web service and query data from database CM_P01 on localhost and AD using port 8080
+.NOTES
+    Tested with UD Community Edition 2.7, AdsiPS 1.0.0.8, dbatools 1.0.51
+    0.1 - 1910.29 - Initial release as prototype
+#>
 function New-UDCM {
     [CmdletBinding()]
     param(
-        [parameter()][ValidateLength(3,3)][string] $SiteCode = "P01",
+        [parameter(Mandatory)][ValidateLength(3,3)][string] $SiteCode,
         [parameter()][ValidateNotNullOrEmpty()][string] $Database = "CM_$SiteCode",
         [parameter()][ValidateNotNullOrEmpty()][string] $DbHost = "localhost",
-        [parameter()][ValidateNotNullOrEmpty()][string] $ConfigFile = "config.json",
-        [parameter()][int] $Port = 10001
+        [parameter()][int] $Port = 10001,
+        [parameter()][ValidateNotNullOrEmpty()][string] $ConfigFile = "config.json"
     )
     $ErrorActionPreference = 'stop'
     try {
@@ -78,23 +132,10 @@ order by
 
         $Cache:ADGroups = @( Get-ADSIGroup )
         $Endpoints += New-UDEndpoint -Url "adgroups" -Endpoint { $Cache:ADGroups | ConvertTo-Json }
-        
+
         Start-UDRestApi -Endpoint $Endpoints -Port $Port -AutoReload -Name "udcm"
     }
     catch {
         Write-Error $_.Exception.Message
-    }
-}
-
-function Import-UdCmJson {
-    param(
-        [parameter()][ValidateNotNullOrEmpty()][string]$InputFile = "config.json"
-    )
-    if (Test-Path $InputFile) {
-        $hashtable = @{}
-        Write-Output $(Get-Content -Path $InputFile | ConvertFrom-Json) -NoEnumerate
-    }
-    else {
-        Write-Warning "file not found: $InputFile"
     }
 }
