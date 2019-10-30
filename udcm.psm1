@@ -12,13 +12,6 @@ function New-UDCM {
         $Endpoints = @()
 
         Write-Verbose "cmdevices"
-        <#
-        $def = @{
-            Class = "SMS_R_System"
-            Namespace = "root\SMS\Site_$SiteCode"
-        }
-        $Cache:CMDevices = @( Get-WmiObject @def | select ResourceID,Name,Client,ClientVersion,ADSiteName,DistinguishedName,MACAddresses,IPAddresses,LastLogonTimestamp,OperatingSystemNameandVersion,Build )
-        #>
         $def = @{
             SqlInstance = $DbHost
             Database    = $Database
@@ -80,10 +73,12 @@ order by
         $Cache:CMHardware = @( Invoke-DbaQuery @def | Select Manufacturer,Model,Devices )
         $Endpoints += New-UDEndpoint -Url "cmhardware" -Endpoint { $Cache:CMHardware | ConvertTo-Json }
         
-        <#
-        adusers = "properties": "SamAccountName,DisplayName,DistinguishedName,Mail,UserPrincipalName"
-        adgroups = "properties": "Name,DisplayName,DistinguishedName"
-        #>
+        $Cache:ADUsers = @( Get-ADSIUser -NoResultLimit )
+        $Endpoints += New-UDEndpoint -Url "adusers" -Endpoint { $Cache:ADUsers | ConvertTo-Json }
+
+        $Cache:ADGroups = @( Get-ADSIGroup )
+        $Endpoints += New-UDEndpoint -Url "adgroups" -Endpoint { $Cache:ADGroups | ConvertTo-Json }
+        
         Start-UDRestApi -Endpoint $Endpoints -Port $Port -AutoReload -Name "udcm"
     }
     catch {
