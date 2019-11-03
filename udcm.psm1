@@ -146,6 +146,20 @@ order by
             $Cache:ADGroups | Where-Object {$_.Name -eq $name} | ConvertTo-Json 
         }
 
+        # prefix = "WS" -> Get highest number name -> "WS04" -> increment to "WS05"
+        $Endpoints += New-UDEndpoint -Url "cmnewdevicename/:prefix" -Endpoint {
+            $lastname = $Cache:CMDevices | Where-Object {$_.Name.StartsWith($prefix)} | 
+                Sort-Object Name | Select-Object -Last 1
+            $parsed = @($lastname -split '(?=\d)',2)
+            if ($parsed.Count -gt 1) {
+                $suffix = $parsed[1]
+            }
+            else {
+                $suffix = "1"
+            }
+            ### finish code here ###
+            
+        }
         Start-UDRestApi -Endpoint $Endpoints -Port $Port -AutoReload -Name "udcm"
     }
     catch {
