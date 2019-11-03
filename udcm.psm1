@@ -9,6 +9,7 @@
     Import-UdCmJson -InputFile "c:\apps\config.json"
 .NOTES
     1910.29 - 0.1 - Initial release
+    1910.31 - 0.2 - added Get-NextDeviceName()
 #>
 function Import-UdCmJson {
     param(
@@ -95,15 +96,19 @@ FROM
 order by
     sys.Name0"
         }
-        $Cache:CMDevices = @( Invoke-DbaQuery @def | Select ResourceID,Name,Client,ClientVersion,ADSiteName,OSName,OSBuild,UserName,LastHwScan,LastDDR,LastPolicyReq,LastMP,IsVM,Manufacturer,Model,SerialNumber )
+        $Cache:CMDevices = @( Invoke-DbaQuery @def | Select-Object ResourceID,Name,Client,ClientVersion,ADSiteName,OSName,OSBuild,UserName,LastHwScan,LastDDR,LastPolicyReq,LastMP,IsVM,Manufacturer,Model,SerialNumber )
         $Endpoints += New-UDEndpoint -Url "cmdevices" -Endpoint { $Cache:CMDevices | ConvertTo-Json }
+
+        $Endpoints += New-UDEndpoint -Url "cmdevices/:name" -Endpoint {
+            $Cache:CMDevices | Where-Object {$_.Name -eq $name} | ConvertTo-Json
+        }
 
         Write-Verbose "cmusers"
         $def = @{
             Class = "SMS_R_User"
             Namespace = "root\SMS\Site_$SiteCode"
         }
-        $Cache:CMUsers = @( Get-WmiObject @def | select UserName,FullUserName,DistinguishedName,Mail,UserPrincipalName,UserAccountControl,UserGroupName,UserOUName,ObjectGUID,WindowsNTDomain )
+        $Cache:CMUsers = @( Get-WmiObject @def | Select-Object UserName,FullUserName,DistinguishedName,Mail,UserPrincipalName,UserAccountControl,UserGroupName,UserOUName,ObjectGUID,WindowsNTDomain )
         $Endpoints += New-UDEndpoint -Url "cmusers" -Endpoint { $Cache:CMUsers | ConvertTo-Json }
 
         Write-Verbose "cmapps"
@@ -115,27 +120,73 @@ order by
             group by ARPDisplayName0,ProductVersion0,Publisher0,ProductCode0 
             order by ARPDisplayName0,ProductVersion0"
         }
-        $Cache:CMApps = @( Invoke-DbaQuery @def | Select ProductName,Version,Publisher,ProductCode,Installs )
+        $Cache:CMApps = @( Invoke-DbaQuery @def | Select-Object ProductName,Version,Publisher,ProductCode,Installs )
         $Endpoints += New-UDEndpoint -Url "cmapps" -Endpoint { $Cache:CMApps | ConvertTo-Json }
 
-        Write-Verbose "cmhardware"
+        Write-Verbose "cmdevicemodels"
         $def = @{
             SqlInstance = $DbHost
             Database    = $Database
             Query = "select Manufacturer0 as Manufacturer, Model0 as Model, COUNT(*) as Devices from dbo.v_GS_COMPUTER_SYSTEM group by Manufacturer0,Model0 order by Manufacturer0,Model0"
         }
-        $Cache:CMHardware = @( Invoke-DbaQuery @def | Select Manufacturer,Model,Devices )
-        $Endpoints += New-UDEndpoint -Url "cmhardware" -Endpoint { $Cache:CMHardware | ConvertTo-Json }
+        $Cache:CMModels = @( Invoke-DbaQuery @def | Select-Object Manufacturer,Model,Devices )
+        $Endpoints += New-UDEndpoint -Url "cmdevicemodels" -Endpoint { $Cache:CMModels | ConvertTo-Json }
         
         $Cache:ADUsers = @( Get-ADSIUser -NoResultLimit )
         $Endpoints += New-UDEndpoint -Url "adusers" -Endpoint { $Cache:ADUsers | ConvertTo-Json }
 
+        $Endpoints += New-UDEndpoint -Url "adusers/:id" -Endpoint {
+            $Cache:ADUsers | Where-Object {$_.SamAccountName -eq $id} | ConvertTo-Json
+        }
+
         $Cache:ADGroups = @( Get-ADSIGroup )
         $Endpoints += New-UDEndpoint -Url "adgroups" -Endpoint { $Cache:ADGroups | ConvertTo-Json }
+
+        $Endpoints += New-UDEndpoint -Url "adgroups/:name" -Endpoint { 
+            $Cache:ADGroups | Where-Object {$_.Name -eq $name} | ConvertTo-Json 
+        }
 
         Start-UDRestApi -Endpoint $Endpoints -Port $Port -AutoReload -Name "udcm"
     }
     catch {
         Write-Error $_.Exception.Message
     }
+}
+
+function Invoke-IncrementName {
+    [CmdletBinding()]
+    param (
+        [parameter(Mandatory)][string] $Name
+    )
+    try {
+        $result = $Name
+        $pn = @($Name -split '(?=\d)',2)
+        if ($pn.Count -gt 1) {
+            $prefix = $pn[0]
+            $suffix = $pn[1]
+            $suflen = $suffix.Length
+            if ($suflen -gt 1) {
+                $sufch = $suffix.Substring(0,1)
+            }
+            else {
+                $sufch = ""
+            }
+            $newsuf = $([int]$suffix)+1
+            $newsuf = $([string]$newsuf).PadLeft($suflen,$sufch)
+            $result = "$prefix"+"$newsuf"
+            return $result
+        }
+    }
+    catch {
+        Write-Error $_.Exception.Message 
+    }
+}
+
+function Get-NextDeviceName {
+    [CmdletBinding()]
+    param(
+        [parameter()][ValidateNotNullOrEmpty()][string]$Prefix
+    )
+    $lastItem = (Get-ADSIComputer).Name | Where-Object {$_.StartsWith($Prefix)} | Sort-Object Name | Select-Object -Last 1
+    return Invoke-IncrementName -Name $lastItem
 }
