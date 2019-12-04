@@ -38,6 +38,8 @@ function Import-UdCmJson {
     Configuration Manager site database instance hostname (default is localhost)
 .PARAMETER Port
     TCP port number for web service (default is 10001)
+.PARAMETER DeviceNameLength
+    Default length for new device names when using /device
 .PARAMETER ConfigFile
     (not currently used, planned for the future)
 .EXAMPLE
@@ -59,6 +61,7 @@ function New-UDCM {
         [parameter(Mandatory)][ValidateLength(3,3)][string] $SiteCode,
         [parameter()][ValidateNotNullOrEmpty()][string] $Database = "CM_$SiteCode",
         [parameter()][ValidateNotNullOrEmpty()][string] $DbHost = "localhost",
+        [parameter()][int] $DeviceNameLength = 5,
         [parameter()][int] $Port = 10001,
         [parameter()][ValidateNotNullOrEmpty()][string] $ConfigFile = "config.json"
     )
@@ -146,13 +149,15 @@ order by
             $Cache:ADGroups | Where-Object {$_.Name -eq $name} | ConvertTo-Json 
         }
 
-        # prefix = "WS" -> Get highest number name -> "WS04" -> increment to "WS05"
-        $Endpoints += New-UDEndpoint -Url "cmnewdevicename/:prefix" -Endpoint {
+        # prefix = "WS" -> Get highest number name -> "WS004" -> increment to return "WS005"
+        $Endpoints += New-UDEndpoint -Url "nextdevicename/:prefix" -Endpoint {
             $lastname = $Cache:CMDevices | Where-Object {$_.Name.StartsWith($prefix)} | 
                 Sort-Object Name | Select-Object -Last 1
             $parsed = @($lastname -split '(?=\d)',2)
             if ($parsed.Count -gt 1) {
                 $suffix = $parsed[1]
+                $numval = [int]$suffix
+                $suflen = $suffix.Length
             }
             else {
                 $suffix = "1"
