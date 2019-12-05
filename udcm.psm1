@@ -24,6 +24,18 @@ function Import-UdCmJson {
     }
 }
 
+function Import-UdCmKey {
+    param (
+        [parameter()][ValidateNotNullOrEmpty()][string] $InputFile = "keyfile.txt"
+    )
+    if (Test-Path $InputFile) {
+        Write-Output $(Get-Content -Path $InputFile).Trim()
+    }
+    else {
+        Write-Warning "file not found: $InputFile"
+    }
+}
+
 <#
 .SYNOPSIS
     Launch udcm web service
